@@ -351,14 +351,13 @@ export default class ReconnectingWebSocket {
         if (this._connectLock || !this._shouldReconnect) {
             return;
         }
-        this._connectLock = true;
-
         const {
             maxRetries = DEFAULT.maxRetries,
             connectionTimeout = DEFAULT.connectionTimeout,
             WebSocket = getGlobalWebSocket(),
         } = this._options;
-
+        try {
+        this._connectLock = true;
         if (this._retryCount >= maxRetries) {
             this._debug('max retries reached', this._retryCount, '>=', maxRetries);
             return;
@@ -371,9 +370,14 @@ export default class ReconnectingWebSocket {
         if (!isWebSocket(WebSocket)) {
             throw Error('No valid WebSocket class provided');
         }
+        } catch (e) {
+            this._connectLock = false;
+            throw e;
+        }
         this._wait()
             .then(() => this._getNextUrl(this._url))
             .then(url => {
+                try {
                 // close could be called before creating the ws
                 if (this._closeCalled) {
                     return;
@@ -383,9 +387,13 @@ export default class ReconnectingWebSocket {
                     ? new WebSocket(url, this._protocols)
                     : new WebSocket(url);
                 this._ws!.binaryType = this._binaryType;
-                this._connectLock = false;
+                } catch (e) {
+                  console.error(e);
+                  return;
+                } finally {
+                  this._connectLock = false;
+                }
                 this._addListeners();
-
                 this._connectTimeout = setTimeout(() => this._handleTimeout(), connectionTimeout);
             });
     }
